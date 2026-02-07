@@ -2,78 +2,85 @@ import streamlit as st
 import cv2
 import numpy as np
 from PIL import Image
+from weather import get_weather
+from gemini import analyze_plant_with_agent
 import json
-from google import genai
-from google.genai import types
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+from google import genai
+from google.genai import types
+
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-st.set_page_config(page_title="AgriVision Live", layout="centered")
-st.title("🌱 AgriVision Live")
+st.set_page_config(page_title="AgriVision Agent", layout="centered")
+st.title("🌱 AgriVision: Intelligent Crop Doctor")
 
-# Setup a clean UI container
-view_container = st.empty()
-info_container = st.container()
 
-# 1. Check if we already have an image in the "Session State"
-print("Beore ",st.session_state)
+with st.sidebar:
+    st.header("Settings")
+    user_city = st.text_input("Your City", value="Sahiwal")
+
 if 'captured_image' not in st.session_state:
-    print("AFTER ",st.session_state)
     st.session_state.captured_image = None
 
-# 2. Only show the camera if no image has been captured yet
 if st.session_state.captured_image is None:
-    img_file_buffer = st.camera_input("Point at a leaf and capture")
+    img_file_buffer = st.camera_input("Scan your crop")
+    
     if img_file_buffer:
-        # Load and save to session state so camera disappears
         file_bytes = np.asarray(bytearray(img_file_buffer.read()), dtype=np.uint8)
         img = cv2.imdecode(file_bytes, 1)
         st.session_state.captured_image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        st.rerun() # Refresh to hide camera and show analysis
+        st.rerun()
 
-# 3. If an image exists, show the analysis UI
-if st.session_state.captured_image is not None:
-    opencv_image = st.session_state.captured_image.copy()
-    view_container = st.empty()
-    view_container.image(opencv_image, caption="Analyzing...")
-
-    # ADD A "RESET" BUTTON to take a new photo
-    if st.button("🔄 Scan Another Leaf"):
+else:
+    image_spot = st.empty()
+    
+    image_spot.image(st.session_state.captured_image, caption="Consulting Agent...", width="stretch")
+    
+    if st.button("Scan New Plant"):
         st.session_state.captured_image = None
         st.rerun()
 
-    try:
-        # --- YOUR GEMINI LOGIC START ---
-        pil_image = Image.fromarray(opencv_image)
+    with st.spinner(f"Analyzing leaf & Weather in {user_city}..."):
+        pil_image = Image.fromarray(st.session_state.captured_image)
+
+        prompt = f"Diagnose disease. User is in {user_city}. Check weather using the tool."
+        
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
-            contents=[pil_image, "Diagnose plant disease. Return JSON with [ymin, xmin, ymax, xmax]."],
+            model="gemini-3-flash-preview", 
+            contents=[pil_image, prompt],
             config=types.GenerateContentConfig(
-                system_instruction="Return ONLY JSON: {'disease_name': '...', 'coordinates': [ymin, xmin, ymax, xmax], 'treatment': '...'}",
+                tools=[get_weather],
+                system_instruction="""
+                Return ONLY JSON. 
+                1. Identify disease. 
+                2. Check weather. If humidity > 80% or rain, warn user in 'treatment'.
+                JSON Format: {'disease_name': '...', 'coordinates': [ymin, xmin, ymax, xmax], 'treatment': '...', 'medicine': '...'}
+                """,
                 response_mime_type="application/json"
             )
         )
         
-        res_data = json.loads(response.text)
+        result = json.loads(response.text)
         
-        if "coordinates" in res_data:
-            h, w, _ = opencv_image.shape
-            ymin, xmin, ymax, xmax = res_data['coordinates']
-            start_point = (int(xmin * w / 1000), int(ymin * h / 1000))
-            end_point = (int(xmax * w / 1000), int(ymax * h / 1000))
+        if "coordinates" in result:
+            annotated_img = st.session_state.captured_image.copy()
+            h, w, _ = annotated_img.shape
             
-            # Draw the box
-            cv2.rectangle(opencv_image, start_point, end_point, (57, 255, 20), 8) 
+            coords = result.get('coordinates', [0, 0, 0, 0])
+            ymin, xmin, ymax, xmax = coords
             
-            # Update the SAME container (No double images!)
-            view_container.image(opencv_image, caption="DIAGNOSIS COMPLETE")
+            start = (int(xmin * w / 1000), int(ymin * h / 1000))
+            end = (int(xmax * w / 1000), int(ymax * h / 1000))
             
-            st.success(f"**Disease:** {res_data['disease_name']}")
-            st.write(f"**Treatment:** {res_data.get('treatment', 'Consult a specialist.')}")
-        # --- YOUR GEMINI LOGIC END ---
-
-    except Exception as e:
-        st.error(f"Error: {e}")
+            cv2.rectangle(annotated_img, start, end, (57, 255, 20), 8)
+            
+            image_spot.image(annotated_img, caption=f"Detected: {result.get('disease_name', 'Unknown')}", width="stretch")
+            
+            st.success(f"**Diagnosis:** {result.get('disease_name', 'Unknown')}")
+            st.warning(f"**Treatment Plan:** {result.get('treatment', 'No specific treatment advice available.')}")
+            st.info(f"**Recommended Medicine:** {result.get('medicine', 'Consult a local expert.')}")
+            
+        elif "error" in result:
+            st.error(f"Error: {result['error']}")
