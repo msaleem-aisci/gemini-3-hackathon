@@ -91,7 +91,7 @@ def plant_analyzer(pil_image, city):
         return {"error": f"Agent Failed: {str(e)}"}
 
 st.title("AgriVision Pro: Autonomous Agent")
-st.caption("Powered by Gemini 2.0 Flash • Weather Aware • Live Search")
+st.caption("Powered by Gemini • Weather Aware • Live Search")
 
 with st.sidebar:
     st.header("Settings")
