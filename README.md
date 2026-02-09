@@ -1,4 +1,3 @@
-![Uploading image.png…]()
 
 
 # AgriVision: Autonomous Crop Doctor
