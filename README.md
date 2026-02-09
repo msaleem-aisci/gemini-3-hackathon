@@ -1,8 +1,10 @@
+![Uploading image.png…]()
+
+
 # AgriVision: Autonomous Crop Doctor
 
 ### *Powered by Gemini 3 • Weather Aware • Agentic Search*
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://agrivision-blueminds.streamlit.app/)
 
 **AgriVision Pro** is an intelligent, multimodal AI consultant designed to save crops and empower farmers in Pakistan. It goes beyond simple detection by using **Agentic Reasoning** to provide safe, actionable, and market-aware advice.
 
