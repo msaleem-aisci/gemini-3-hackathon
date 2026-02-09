@@ -112,7 +112,7 @@ def plant_analyzer(pil_image, city):
         return {"error": f"Agent Failed: {str(e)}"}
     
 
-st.title("🌱 AgriVision Pro")
+st.title("AgriVision")
 st.caption("Autonomous Agent • Weather Aware • Market Search")
 
 with st.sidebar:
